@@ -8,20 +8,40 @@ export type LevelPoint = Readonly<{
   y: number;
 }>;
 
-export type WorldGeometry = Readonly<{
+export type LevelRectangle = Readonly<{
   id: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  kind: "ground" | "platform" | "wall";
 }>;
+
+export type WorldGeometry = LevelRectangle &
+  Readonly<{
+    kind: "ground" | "platform" | "wall";
+  }>;
+
+export type HazardZone = LevelRectangle &
+  Readonly<{
+    kind: "spike" | "pit";
+    damage: number;
+  }>;
+
+export type CheckpointDefinition = LevelRectangle &
+  Readonly<{
+    respawnPosition: LevelPoint;
+  }>;
+
+export type GoalDefinition = LevelRectangle;
 
 export type LevelLayout = Readonly<{
   id: string;
   bounds: LevelBounds;
   playerSpawn: LevelPoint;
   world: readonly WorldGeometry[];
+  hazards: readonly HazardZone[];
+  checkpoints: readonly CheckpointDefinition[];
+  goal: GoalDefinition;
 }>;
 
 const WORLD_WIDTH = 4_800;
@@ -155,6 +175,52 @@ export const LEVEL_01: LevelLayout = {
       kind: "platform",
     },
   ],
+  hazards: [
+    {
+      id: "tutorial-pit",
+      x: 1_080,
+      y: 600,
+      width: 220,
+      height: 120,
+      kind: "pit",
+      damage: 1,
+    },
+    {
+      id: "challenge-spikes-1",
+      x: 2_430,
+      y: 608,
+      width: 140,
+      height: 32,
+      kind: "spike",
+      damage: 1,
+    },
+    {
+      id: "challenge-spikes-2",
+      x: 2_860,
+      y: 608,
+      width: 90,
+      height: 32,
+      kind: "spike",
+      damage: 1,
+    },
+  ],
+  checkpoints: [
+    {
+      id: "checkpoint-1",
+      x: 3_420,
+      y: 445,
+      width: 180,
+      height: 100,
+      respawnPosition: { x: 3_480, y: 500 },
+    },
+  ],
+  goal: {
+    id: "level-goal",
+    x: 4_540,
+    y: 500,
+    width: 100,
+    height: 140,
+  },
 };
 
 export const validateLevelLayout = (
@@ -171,7 +237,13 @@ export const validateLevelLayout = (
   }
 
   const ids = new Set<string>();
-  for (const geometry of layout.world) {
+  const rectangles: readonly LevelRectangle[] = [
+    ...layout.world,
+    ...layout.hazards,
+    ...layout.checkpoints,
+    layout.goal,
+  ];
+  for (const geometry of rectangles) {
     if (ids.has(geometry.id))
       errors.push(`duplicate geometry id: ${geometry.id}`);
     ids.add(geometry.id);
@@ -189,6 +261,12 @@ export const validateLevelLayout = (
     }
   }
 
+  for (const hazard of layout.hazards) {
+    if (!Number.isFinite(hazard.damage) || hazard.damage <= 0) {
+      errors.push(`${hazard.id} damage must be a finite, positive number`);
+    }
+  }
+
   if (
     layout.playerSpawn.x < 0 ||
     layout.playerSpawn.y < 0 ||
@@ -198,5 +276,43 @@ export const validateLevelLayout = (
     errors.push("player spawn must stay inside level bounds");
   }
 
+  if (
+    layout.hazards.some((hazard) => containsPoint(hazard, layout.playerSpawn))
+  ) {
+    errors.push("player spawn must not overlap a hazard");
+  }
+
+  for (const checkpoint of layout.checkpoints) {
+    if (!isPointInsideBounds(layout.bounds, checkpoint.respawnPosition)) {
+      errors.push(
+        `${checkpoint.id} respawn position must stay inside level bounds`,
+      );
+    }
+    if (
+      layout.hazards.some((hazard) =>
+        containsPoint(hazard, checkpoint.respawnPosition),
+      )
+    ) {
+      errors.push(
+        `${checkpoint.id} respawn position must not overlap a hazard`,
+      );
+    }
+  }
+
   return errors;
 };
+
+const containsPoint = (
+  rectangle: Pick<LevelRectangle, "x" | "y" | "width" | "height">,
+  point: LevelPoint,
+): boolean =>
+  point.x >= rectangle.x &&
+  point.x <= rectangle.x + rectangle.width &&
+  point.y >= rectangle.y &&
+  point.y <= rectangle.y + rectangle.height;
+
+const isPointInsideBounds = (bounds: LevelBounds, point: LevelPoint): boolean =>
+  point.x >= 0 &&
+  point.x <= bounds.width &&
+  point.y >= 0 &&
+  point.y <= bounds.height;

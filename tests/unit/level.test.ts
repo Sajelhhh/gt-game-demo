@@ -25,6 +25,22 @@ describe("level-01 layout", () => {
     ).toBeGreaterThanOrEqual(5);
   });
 
+  it("authors readable hazards, a safe checkpoint and a goal trigger", () => {
+    expect(LEVEL_01.hazards.some(({ kind }) => kind === "spike")).toBe(true);
+    expect(LEVEL_01.hazards.some(({ kind }) => kind === "pit")).toBe(true);
+    expect(LEVEL_01.checkpoints).toHaveLength(1);
+    expect(LEVEL_01.goal.id).toBe("level-goal");
+    expect(
+      LEVEL_01.hazards.some(
+        (hazard) =>
+          LEVEL_01.playerSpawn.x >= hazard.x &&
+          LEVEL_01.playerSpawn.x <= hazard.x + hazard.width &&
+          LEVEL_01.playerSpawn.y >= hazard.y &&
+          LEVEL_01.playerSpawn.y <= hazard.y + hazard.height,
+      ),
+    ).toBe(false);
+  });
+
   it("reports duplicate and out-of-bounds geometry", () => {
     const invalid: LevelLayout = {
       ...LEVEL_01,
@@ -38,5 +54,26 @@ describe("level-01 layout", () => {
       "duplicate geometry id: left-wall",
       "left-wall must stay inside level bounds",
     ]);
+  });
+
+  it("rejects unsafe spawn and checkpoint positions", () => {
+    const spike = LEVEL_01.hazards.find(({ kind }) => kind === "spike")!;
+    const invalid: LevelLayout = {
+      ...LEVEL_01,
+      playerSpawn: { x: spike.x, y: spike.y },
+      checkpoints: [
+        {
+          ...LEVEL_01.checkpoints[0],
+          respawnPosition: { x: spike.x, y: spike.y },
+        },
+      ],
+    };
+
+    expect(validateLevelLayout(invalid, VIEWPORT)).toContain(
+      "player spawn must not overlap a hazard",
+    );
+    expect(validateLevelLayout(invalid, VIEWPORT)).toContain(
+      "checkpoint-1 respawn position must not overlap a hazard",
+    );
   });
 });
