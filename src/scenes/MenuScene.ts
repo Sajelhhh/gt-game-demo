@@ -29,8 +29,21 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.add
+      .text(
+        widthPx / 2,
+        heightPx / 2 + 31,
+        "A / D 或 ← / → 移动  ·  Space / W 跳跃  ·  J / X 攻击  ·  Esc 暂停",
+        {
+          color: "#d5dbea",
+          fontFamily: "system-ui, sans-serif",
+          fontSize: "17px",
+        },
+      )
+      .setOrigin(0.5);
+
     const startButton = this.add
-      .text(widthPx / 2, heightPx / 2 + 66, "开始游戏", {
+      .text(widthPx / 2, heightPx / 2 + 91, "开始游戏  [Enter]", {
         backgroundColor: "#5c7c5a",
         color: "#ffffff",
         fontFamily: "system-ui, sans-serif",
