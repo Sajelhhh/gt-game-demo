@@ -75,20 +75,20 @@ export const LEVEL_01: LevelLayout = {
       kind: "wall",
     },
 
-    // A single readable pit separates the tutorial and combat spaces.
+    // A single readable, base-jump-clearable pit separates the spaces.
     {
       id: "tutorial-ground",
       x: 0,
       y: 640,
-      width: 1_080,
+      width: 1_140,
       height: 80,
       kind: "ground",
     },
     {
       id: "main-ground",
-      x: 1_300,
+      x: 1_260,
       y: 640,
-      width: WORLD_WIDTH - 1_300,
+      width: WORLD_WIDTH - 1_260,
       height: 80,
       kind: "ground",
     },
@@ -112,7 +112,7 @@ export const LEVEL_01: LevelLayout = {
     },
     {
       id: "pit-landing",
-      x: 1_300,
+      x: 1_260,
       y: 540,
       width: 260,
       height: 24,
@@ -178,9 +178,9 @@ export const LEVEL_01: LevelLayout = {
   hazards: [
     {
       id: "tutorial-pit",
-      x: 1_080,
+      x: 1_140,
       y: 600,
-      width: 220,
+      width: 120,
       height: 120,
       kind: "pit",
       damage: 1,
