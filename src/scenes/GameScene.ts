@@ -12,11 +12,14 @@ import {
   type GameFlowState,
 } from "../contracts/states";
 import type { GameConfig } from "../game/config";
+import { LEVEL_01, validateLevelLayout } from "../level/level01";
+import { LevelLoader } from "../level/LevelLoader";
 import { SCENE_KEY } from "./keys";
 
 export class GameScene extends Phaser.Scene {
   private readonly unsubscribe: Unsubscribe[] = [];
   private flow!: StrictStateMachine<GameFlowState>;
+  public worldLayer!: Phaser.Physics.Arcade.StaticGroup;
 
   constructor(
     private readonly gameConfig: Readonly<GameConfig>,
@@ -30,7 +33,7 @@ export class GameScene extends Phaser.Scene {
     this.flow.transition(GAME_FLOW_STATE.PLAYING);
     document.querySelector("#game")?.setAttribute("data-scene", "game");
 
-    this.createPlaceholderLevel();
+    this.createLevel();
     this.registerLifecycleListeners();
 
     if (!this.scene.isActive(SCENE_KEY.UI)) {
@@ -38,20 +41,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private createPlaceholderLevel(): void {
+  private createLevel(): void {
     const { widthPx, heightPx } = this.gameConfig.render;
-    const backdrop = this.add.graphics();
-    backdrop.fillStyle(0x182033).fillRect(0, 0, widthPx, heightPx);
-    backdrop.fillStyle(0x263750).fillRect(0, heightPx - 110, widthPx, 110);
-    backdrop.fillStyle(0x78966b).fillRect(0, heightPx - 120, widthPx, 10);
+    const errors = validateLevelLayout(LEVEL_01, {
+      width: widthPx,
+      height: heightPx,
+    });
+    if (errors.length > 0) {
+      throw new Error(`Invalid ${LEVEL_01.id}: ${errors.join("; ")}`);
+    }
+
+    const level = new LevelLoader(this).load(LEVEL_01);
+    this.worldLayer = level.world;
 
     this.add
-      .text(widthPx / 2, heightPx / 2, "关卡骨架已就绪", {
+      .text(100, 120, "A / D 移动 · SPACE 跳跃", {
         color: "#c8d4b8",
         fontFamily: "system-ui, sans-serif",
-        fontSize: "30px",
+        fontSize: "25px",
       })
-      .setOrigin(0.5);
+      .setDepth(10);
   }
 
   private registerLifecycleListeners(): void {
