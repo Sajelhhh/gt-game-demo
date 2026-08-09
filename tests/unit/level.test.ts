@@ -5,6 +5,11 @@ import {
   validateLevelLayout,
   type LevelLayout,
 } from "../../src/level/level01";
+import {
+  calculateBaseJumpHazardLimitPx,
+  calculateJumpEnvelope,
+} from "../../src/level/reachability";
+import { DEFAULT_GAME_CONFIG } from "../../src/game/config";
 
 const VIEWPORT = { width: 1_280, height: 720 } as const;
 
@@ -39,6 +44,71 @@ describe("level-01 layout", () => {
           LEVEL_01.playerSpawn.y <= hazard.y + hazard.height,
       ),
     ).toBe(false);
+  });
+
+  it("keeps every authored hazard below the configured jump envelope", () => {
+    const playerWidthPx = 32;
+    const motion = {
+      moveSpeedPxPerSecond: DEFAULT_GAME_CONFIG.player.moveSpeedPxPerSecond,
+      jumpSpeedPxPerSecond: DEFAULT_GAME_CONFIG.player.jumpSpeedPxPerSecond,
+      gravityYPxPerSecondSquared: DEFAULT_GAME_CONFIG.physics.gravityY,
+      airJumps: DEFAULT_GAME_CONFIG.player.airJumps,
+    };
+    const doubleJump = calculateJumpEnvelope(motion);
+    const firstPit = LEVEL_01.hazards.find(({ id }) => id === "tutorial-pit")!;
+    const tutorialGround = LEVEL_01.world.find(
+      ({ id }) => id === "tutorial-ground",
+    )!;
+    const requiredRisePx = Math.max(0, tutorialGround.y - firstPit.y);
+    const baseJumpHazardLimitPx = calculateBaseJumpHazardLimitPx(
+      { ...motion, airJumps: 0 },
+      requiredRisePx,
+      playerWidthPx,
+    );
+
+    expect(requiredRisePx).toBe(0);
+    expect(baseJumpHazardLimitPx).toBeCloseTo(125.67, 1);
+    expect(baseJumpHazardLimitPx - firstPit.width).toBeGreaterThanOrEqual(60);
+
+    for (const hazard of LEVEL_01.hazards) {
+      expect(
+        hazard.width + playerWidthPx,
+        `${hazard.id} exceeds the double-jump horizontal envelope`,
+      ).toBeLessThan(doubleJump.apexChainedDistancePx);
+    }
+
+    const route = [
+      "tutorial-ground",
+      "tutorial-step-1",
+      "tutorial-step-2",
+      "pit-landing",
+      "combat-platform-1",
+      "combat-platform-2",
+      "challenge-platform-1",
+      "challenge-platform-2",
+      "checkpoint-shelf",
+      "final-platform-1",
+      "final-platform-2",
+    ];
+    const platforms = route.map(
+      (id) => LEVEL_01.world.find((geometry) => geometry.id === id)!,
+    );
+
+    for (let index = 1; index < platforms.length; index += 1) {
+      const from = platforms[index - 1];
+      const to = platforms[index];
+      const horizontalGapPx = Math.max(0, to.x - (from.x + from.width));
+      const requiredRisePx = Math.max(0, from.y - to.y);
+
+      expect(
+        horizontalGapPx + playerWidthPx,
+        `${from.id} -> ${to.id} is horizontally impossible`,
+      ).toBeLessThan(doubleJump.apexChainedDistancePx);
+      expect(
+        requiredRisePx,
+        `${from.id} -> ${to.id} is vertically impossible`,
+      ).toBeLessThan(doubleJump.maximumRisePx);
+    }
   });
 
   it("reports duplicate and out-of-bounds geometry", () => {

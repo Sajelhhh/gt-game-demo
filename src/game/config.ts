@@ -37,6 +37,9 @@ export interface GameConfig {
       readonly hitboxHeightPx: number;
       readonly knockbackXPxPerSecond: number;
       readonly knockbackYPxPerSecond: number;
+      readonly shockwaveDurationMs: number;
+      readonly shockwaveTravelPx: number;
+      readonly shockwaveRadiusPx: number;
     };
     readonly contactKnockbackXPxPerSecond: number;
     readonly contactKnockbackYPxPerSecond: number;
@@ -124,6 +127,9 @@ const DEFAULTS = {
       hitboxHeightPx: 24,
       knockbackXPxPerSecond: 180,
       knockbackYPxPerSecond: 140,
+      shockwaveDurationMs: 220,
+      shockwaveTravelPx: 58,
+      shockwaveRadiusPx: 24,
     },
     contactKnockbackXPxPerSecond: 160,
     contactKnockbackYPxPerSecond: 120,

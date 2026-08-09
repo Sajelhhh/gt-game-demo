@@ -75,7 +75,7 @@ export const LEVEL_01: LevelLayout = {
       kind: "wall",
     },
 
-    // A single readable, base-jump-clearable pit separates the spaces.
+    // The first pit intentionally leaves generous base-jump clearance.
     {
       id: "tutorial-ground",
       x: 0,
@@ -86,9 +86,9 @@ export const LEVEL_01: LevelLayout = {
     },
     {
       id: "main-ground",
-      x: 1_260,
+      x: 1_200,
       y: 640,
-      width: WORLD_WIDTH - 1_260,
+      width: WORLD_WIDTH - 1_200,
       height: 80,
       kind: "ground",
     },
@@ -112,9 +112,9 @@ export const LEVEL_01: LevelLayout = {
     },
     {
       id: "pit-landing",
-      x: 1_260,
+      x: 1_200,
       y: 540,
-      width: 260,
+      width: 320,
       height: 24,
       kind: "platform",
     },
@@ -179,9 +179,9 @@ export const LEVEL_01: LevelLayout = {
     {
       id: "tutorial-pit",
       x: 1_140,
-      y: 600,
-      width: 120,
-      height: 120,
+      y: 648,
+      width: 60,
+      height: 72,
       kind: "pit",
       damage: 1,
     },

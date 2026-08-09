@@ -163,6 +163,9 @@ export class UIScene extends Phaser.Scene {
     const safeCurrent = Phaser.Math.Clamp(currentHealth, 0, safeMax);
     const hearts = `${"♥".repeat(safeCurrent)}${"♡".repeat(safeMax - safeCurrent)}`;
     this.healthText.setText(`${hearts}  生命 ${safeCurrent}/${safeMax}`);
+    document
+      .querySelector("#game")
+      ?.setAttribute("data-player-health", safeCurrent.toString());
   }
 
   private showResult(

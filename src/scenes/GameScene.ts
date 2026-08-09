@@ -103,6 +103,7 @@ export class GameScene extends Phaser.Scene {
   private hazardInteraction!: HazardInteraction;
   private playerCombat!: PlayerCombat;
   private attackFlash!: Phaser.GameObjects.Rectangle;
+  private lastShockwaveAttackId: string | null = null;
   private gameplayElapsedMs = 0;
   private defeatedEnemyCount = 0;
   public worldLayer!: Phaser.Physics.Arcade.StaticGroup;
@@ -121,6 +122,7 @@ export class GameScene extends Phaser.Scene {
     this.anims.resumeAll();
     this.gameplayElapsedMs = 0;
     this.defeatedEnemyCount = 0;
+    this.lastShockwaveAttackId = null;
     this.enemies = [];
     this.chaseEnemies = [];
     document.querySelector("#game")?.setAttribute("data-scene", "game");
@@ -367,12 +369,54 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (attack.attackId !== this.lastShockwaveAttackId) {
+      this.lastShockwaveAttackId = attack.attackId;
+      this.createAttackShockwave(attack);
+    }
+
     this.attackFlash
       .setPosition(attack.flash.bounds.center.x, attack.flash.bounds.center.y)
       .setSize(attack.flash.bounds.widthPx, attack.flash.bounds.heightPx)
       .setDisplaySize(attack.flash.bounds.widthPx, attack.flash.bounds.heightPx)
       .setAlpha(attack.flash.alpha)
       .setVisible(true);
+  }
+
+  private createAttackShockwave(attack: AttackPresentation): void {
+    const config = this.gameConfig.combat.playerMelee;
+    const direction = attack.hitbox.center.x >= this.player.x ? 1 : -1;
+    const startAngle = direction > 0 ? -70 : 110;
+    const endAngle = direction > 0 ? 70 : 250;
+    const originX = this.player.x + direction * 20;
+
+    for (let layer = 0; layer < 2; layer += 1) {
+      const wave = this.add
+        .arc(
+          originX,
+          this.player.y,
+          config.shockwaveRadiusPx * (1 - layer * 0.25),
+          startAngle,
+          endAngle,
+          false,
+          0xd9f9ff,
+          0,
+        )
+        .setStrokeStyle(5 - layer, layer === 0 ? 0xcffafe : 0xfef3c7, 0.95)
+        .setScale(0.45, 0.7)
+        .setDepth(7);
+
+      this.tweens.add({
+        targets: wave,
+        x: originX + direction * config.shockwaveTravelPx,
+        scaleX: 1.7 + layer * 0.2,
+        scaleY: 1.25 + layer * 0.15,
+        alpha: 0,
+        delay: layer * 28,
+        duration: config.shockwaveDurationMs + layer * 45,
+        ease: "Cubic.Out",
+        onComplete: () => wave.destroy(),
+      });
+    }
   }
 
   private completeLevel(): void {
