@@ -1,7 +1,9 @@
 # Shadow Sprout 公共架构契约（MVP）
 
-> 状态：**Q0 冻结**  
-> 适用范围：MVP（`level-01`）  
+> 状态：**Q0 冻结**
+>
+> 适用范围：MVP（`level-01`）
+>
 > 规范性：本文中的名称、字段、默认值、事件顺序和依赖规则均为实施契约。F-02 必须按本文建立严格 TypeScript 类型；后续任务不得另建同义常量或旁路接口。
 
 ## 1. 契约边界
@@ -138,11 +140,17 @@ interface GameConfig {
       readonly moveSpeedPxPerSecond: 110;
       readonly detectionRangePx: 240;
       readonly disengageRangePx: 320;
+      readonly contactDamage: 1;
       readonly attackRangePx: 48;
       readonly attackDamage: 1;
       readonly attackCooldownMs: 900;
       readonly activeFrameStart: 2;
       readonly activeFrameEnd: 3;
+      readonly hitboxOffsetXPx: 24;
+      readonly hitboxWidthPx: 32;
+      readonly hitboxHeightPx: 24;
+      readonly knockbackXPxPerSecond: 160;
+      readonly knockbackYPxPerSecond: 100;
     };
   };
   readonly hazards: {
@@ -184,19 +192,35 @@ type DamageCause =
   | 'enemy-contact'
   | 'spike'
   | 'pit';
+type HealthChangeCause = DamageCause | 'spawn' | 'respawn';
 type Facing = 'left' | 'right';
 type Vec2 = Readonly<{ x: number; y: number }>;
+type HealthSnapshot = Readonly<{
+  currentHealth: number;
+  maxHealth: number;
+}>;
+type HealthChange = Readonly<{
+  previousHealth: number;
+  currentHealth: number;
+  maxHealth: number;
+  appliedDamage: number;
+}>;
 
 interface Damageable {
   readonly id: EntityId;
   readonly kind: EntityKind;
-  readonly health: Health;
   readonly position: Vec2;
+  getHealth(): HealthSnapshot;
+  isAlive(): boolean;
+  isInvulnerable(atMs: number): boolean;
+  commitDamage(amount: number): HealthChange;
+  grantInvulnerability(untilMs: number): void;
   applyKnockback(velocity: Vec2): void;
+  enterDeadState(): void;
 }
 ```
 
-`Health` 只维护 `current`、`max` 和边界不变量，不识别 Phaser body，也不自行查找攻击者。`DamageSystem.applyDamage()` 是唯一生命扣减入口；治疗若在未来加入，使用独立方法和 cause，不把负伤害当治疗。
+`Damageable` 是纯 TypeScript 领域 port，不 import `components/Health`；实体适配器把以上方法委托给自己的 Health、StateMachine 和 body。`Health` 只维护 `current`、`max` 和边界不变量，不识别 Phaser body，也不自行查找攻击者。业务调用只能通过 `DamageSystem.applyDamage()` 进入生命扣减；出生/重生的满血初始化由 DamageSystem 发 `health-changed`，但不发 `damage-applied`。治疗若在未来加入，使用独立方法和 cause，不把负伤害当治疗。
 
 ### 4.2 状态常量
 
@@ -219,7 +243,7 @@ const GAME_FLOW_STATE = {
 } as const;
 ```
 
-状态机对同状态转换返回 no-op；对表外转换返回失败或抛出领域错误，由单元测试固定一种行为。不得借动画名推断规则状态。
+状态机的 `transition(next)` 返回 `boolean`：合法转换提交并返回 `true`；同状态 no-op 并返回 `false`；表外转换抛出 `InvalidStateTransitionError`。不得借动画名推断规则状态。
 
 ### 4.3 合法状态转换
 
@@ -281,7 +305,7 @@ interface GameEventMap {
     currentHealth: number;
     maxHealth: number;
     delta: number;
-    cause: DamageCause;
+    cause: HealthChangeCause;
   }>;
   'attack-started': Readonly<{
     attackId: string;
@@ -351,7 +375,7 @@ interface GameEventMap {
 |---|---|---|
 | `attack-started` | `CombatSystem`（冷却检查通过且状态进入 attack 后） | 实体表现、AudioSystem、统计 |
 | `damage-applied` | `DamageSystem` | 表现、AudioSystem、统计 |
-| `health-changed` | `DamageSystem` | HUD、实体表现 |
+| `health-changed` | `DamageSystem`（包括出生/重生初始化） | HUD、实体表现 |
 | `entity-died` | `DamageSystem` | GameScene、Checkpoint/统计、AudioSystem |
 | `checkpoint-reached` | `CheckpointSystem` | GameScene、UI |
 | `level-completed` | `GameScene`（终点 overlap 委托的流程转换成功后） | UIScene、AudioSystem |
@@ -359,7 +383,7 @@ interface GameEventMap {
 | `restart-requested` | UIScene / 菜单交互层 | GameScene |
 | `audio-settings-changed` | UIScene / 设置交互层 | AudioSystem、设置 UI |
 
-成功伤害的固定原子顺序：校验 target 存活与无敌窗 → `Health` 提交新值 → 施加击退/无敌窗 → emit `damage-applied` → emit `health-changed` → 若为 0，状态转 `dead` 并 emit `entity-died`。被无敌窗、死亡状态或重复 attack-target 拒绝的伤害不发以上事件。
+成功伤害的固定原子顺序：校验 target 存活与无敌窗 → `Health` 提交新值 → 施加击退/无敌窗 → emit `damage-applied` → emit `health-changed` → 若为 0，状态转 `dead` 并 emit `entity-died`。被无敌窗、死亡状态或重复 attack-target 拒绝的伤害不发以上事件。出生/重生初始化发一次 `health-changed`，其 `previousHealth` 与 `currentHealth` 均为满血、`delta=0`、cause 分别为 `spawn`/`respawn`。
 
 攻击只有在冷却通过时发一次 `attack-started`。攻击 hitbox 只在配置的闭区间 `[activeFrameStart, activeFrameEnd]` 启用，并在 attack 状态退出、Scene shutdown 或实体销毁时强制关闭。
 
@@ -412,7 +436,7 @@ const PHYSICS_GROUP = {
 } as const;
 ```
 
-- `World`、`Hazard` 是 Tiled/Tilemap 层或从同名对象层建立的静态碰撞/触发对象。
+- `World`、`Hazard` 是大小写精确匹配的 Tilemap tile layers；检查点、终点等对象层使用各自 level 数据名，不复用这两个碰撞层常量。
 - `Player`、`Enemy`、`PlayerAttack`、`EnemyAttack` 是 Scene 持有的 Arcade group/category 业务名称，用于集中注册 collider/overlap；它们不是引擎 bitmask。
 - MVP 使用 Arcade Physics，禁止引入 Matter collision category、位掩码数字、`setCollisionCategory` 或 `setCollidesWith`。不得给以上字符串再定义数值别名。
 
