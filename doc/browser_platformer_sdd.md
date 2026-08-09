@@ -209,10 +209,18 @@ MVP 仅包含一张线性关卡：
 
 ### 8.2 模块划分
 
+公共架构的规范性定义见 [`browser_platformer_architecture_contract.md`](./browser_platformer_architecture_contract.md)。F-02 必须先实现其中的配置、事件、碰撞和状态契约，再扩展 Scene 骨架。
+
 ```text
 src/
   main.ts
   game/config.ts
+  game/GameEventBus.ts
+  contracts/
+    domain.ts
+    events.ts
+    collision.ts
+    states.ts
   scenes/
     BootScene.ts
     MenuScene.ts
@@ -246,8 +254,9 @@ tests/
 
 - `GameScene` 只负责编排，不堆积角色和战斗细节。
 - 伤害统一通过 `DamageSystem.applyDamage()` 进入，禁止各实体直接修改对方生命值。
-- 玩家与敌人通过事件通信：`attack-started`、`damage-applied`、`entity-died`、`checkpoint-reached`、`level-completed`。
-- 碰撞层必须命名：`World`、`Hazard`、`Player`、`Enemy`、`PlayerAttack`、`EnemyAttack`。
+- 玩家与敌人通过类型化事件通信；事件名、payload、唯一 emitter 和清理生命周期以公共架构契约第 5 节为准。
+- Arcade Physics 的 Tilemap 层必须命名为 `World`、`Hazard`；`Player`、`Enemy`、`PlayerAttack`、`EnemyAttack` 是 group/category 业务名，不是 Matter bitmask。完整矩阵以公共架构契约第 6 节为准。
+- 模块依赖只能沿公共架构契约第 2 节方向；system 不导入具体 Player/Enemy，公共 contracts/config 不依赖 Phaser。
 - 美术资源使用自制、CC0 或明确授权素材，并记录来源。
 
 ## 9. 测试规范
@@ -368,12 +377,12 @@ tests/
 | T-02 | P0 | QA | 主流程 E2E | L-03,U-02 | 冒烟流程通过 |
 | R-01 | P0 | Lead | 集成与发布验收 | 全部 P0 | DoD 全部满足 |
 
-## 12. 待确认决策
+## 12. 已冻结的 MVP 决策
 
-以下项目不阻塞项目地基，但应在进入内容制作前确认：
+以下选择在 Queue 0 冻结；详细接口与边界见公共架构契约第 7 节：
 
-1. 主角与世界观的原创设定。
-2. 是否加入二段跳或冲刺；MVP 默认不加入。
-3. 玩家碰到敌人时是否造成接触伤害；默认造成。
-4. 坠坑是扣 1 点生命还是直接失败；默认扣 1 点并回检查点。
-5. 是否需要移动端；MVP 默认不需要。
+1. 主角设定与最终美术不阻塞工程；MVP 使用原创占位资产或有授权记录的素材。
+2. MVP 不加入二段跳或冲刺。
+3. 玩家碰到敌人时造成 1 点接触伤害，统一进入 `DamageSystem`。
+4. 坠坑扣 1 点生命并回最近检查点；致死时进入失败流程。
+5. MVP 仅支持桌面键盘，不做移动端适配。
