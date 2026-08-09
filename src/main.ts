@@ -1,44 +1,40 @@
-import Phaser from 'phaser';
+import Phaser from "phaser";
 
-import './style.css';
+import "./style.css";
+import { DEFAULT_GAME_CONFIG } from "./game/config";
+import { GameEventBus } from "./game/GameEventBus";
+import { BootScene } from "./scenes/BootScene";
+import { GameScene } from "./scenes/GameScene";
+import { MenuScene } from "./scenes/MenuScene";
+import { UIScene } from "./scenes/UIScene";
 
-const gameConfig: Phaser.Types.Core.GameConfig = {
+const config = DEFAULT_GAME_CONFIG;
+const eventBus = new GameEventBus();
+
+const phaserConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  parent: 'game',
-  width: 1280,
-  height: 720,
-  backgroundColor: '#10131f',
-  pixelArt: true,
+  parent: "game",
+  width: config.render.widthPx,
+  height: config.render.heightPx,
+  backgroundColor: config.render.backgroundColor,
+  pixelArt: config.render.pixelArt,
   physics: {
-    default: 'arcade',
+    default: "arcade",
     arcade: {
-      gravity: { x: 0, y: 1200 },
+      gravity: { x: 0, y: config.physics.gravityY },
     },
   },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: {
-    create(this: Phaser.Scene): void {
-      this.add
-        .text(640, 330, 'SHADOW SPROUT', {
-          color: '#f4f1de',
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '48px',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5);
-
-      this.add
-        .text(640, 395, 'Phaser foundation is ready', {
-          color: '#9ba7c4',
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '24px',
-        })
-        .setOrigin(0.5);
-    },
-  },
+  scene: [
+    new BootScene(config),
+    new MenuScene(config),
+    new GameScene(config, eventBus),
+    new UIScene(config, eventBus),
+  ],
 };
 
-new Phaser.Game(gameConfig);
+const game = new Phaser.Game(phaserConfig);
+game.events.once(Phaser.Core.Events.DESTROY, () => eventBus.clear());
