@@ -35,5 +35,34 @@ export interface Damageable {
   commitDamage(amount: number): HealthChange;
   grantInvulnerability(untilMs: number): void;
   applyKnockback(velocity: Vec2): void;
+  enterHurtState(): void;
   enterDeadState(): void;
 }
+
+export type DamageRequest = Readonly<{
+  target: Damageable;
+  amount: number;
+  cause: DamageCause;
+  sourceId?: EntityId | null;
+  attackId?: string | null;
+  knockbackVelocity: Vec2;
+  nowMs: number;
+  invulnerabilityMs?: number;
+}>;
+
+export type DamageRejectionReason =
+  | "dead"
+  | "invulnerable"
+  | "duplicate-attack"
+  | "zero-damage";
+
+export type DamageResult =
+  | Readonly<{
+      applied: true;
+      change: HealthChange;
+      killed: boolean;
+    }>
+  | Readonly<{
+      applied: false;
+      reason: DamageRejectionReason;
+    }>;

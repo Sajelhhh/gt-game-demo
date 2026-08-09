@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ENEMY_STATE,
-  GAME_FLOW_STATE,
   InvalidStateTransitionError,
-  PLAYER_STATE,
   createEnemyStateMachine,
   createGameFlowStateMachine,
   createPlayerStateMachine,
+} from "../../src/components/StateMachine";
+import {
+  ENEMY_STATE,
+  GAME_FLOW_STATE,
+  PLAYER_STATE,
 } from "../../src/contracts/states";
 
 describe("strict state machines", () => {
