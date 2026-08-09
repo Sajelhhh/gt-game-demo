@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 
 import type { GameConfig } from "../game/config";
+import { CHARACTER_ASSET } from "../game/assets";
 import { SCENE_KEY } from "./keys";
 
 export class BootScene extends Phaser.Scene {
@@ -14,6 +15,9 @@ export class BootScene extends Phaser.Scene {
     this.load.once("loaderror", () => {
       this.loadFailed = true;
     });
+    for (const [key, path] of Object.entries(CHARACTER_ASSET)) {
+      this.load.image(key, path);
+    }
   }
 
   create(): void {

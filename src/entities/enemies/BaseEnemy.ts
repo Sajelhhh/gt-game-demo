@@ -22,6 +22,10 @@ export type EnemyVisual = Readonly<{
   widthPx: number;
   heightPx: number;
   color: number;
+  textureKey: string;
+  displayWidthPx: number;
+  displayHeightPx: number;
+  offsetYPx: number;
 }>;
 
 export type EnemySpawn = Readonly<{
@@ -45,6 +49,8 @@ export abstract class BaseEnemy
   readonly id: EntityId;
   protected readonly stateMachine = createEnemyStateMachine();
   protected facingValue: Facing = "left";
+  private readonly characterImage: Phaser.GameObjects.Image;
+  private readonly visualOffsetYPx: number;
   private readonly health: Health;
   private invulnerableUntilMs = 0;
 
@@ -61,12 +67,18 @@ export abstract class BaseEnemy
       spawn.visual.widthPx,
       spawn.visual.heightPx,
       spawn.visual.color,
+      0,
     );
     this.id = spawn.id;
     this.health = new Health(maxHealth);
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
+    this.visualOffsetYPx = spawn.visual.offsetYPx;
+    this.characterImage = scene.add
+      .image(spawn.x, spawn.y + spawn.visual.offsetYPx, spawn.visual.textureKey)
+      .setDisplaySize(spawn.visual.displayWidthPx, spawn.visual.displayHeightPx)
+      .setDepth(4);
     this.arcadeBody.setCollideWorldBounds(true);
   }
 
@@ -128,6 +140,7 @@ export abstract class BaseEnemy
     this.arcadeBody.enable = false;
     this.setActive(false);
     this.setVisible(false);
+    this.characterImage.setVisible(false);
   }
 
   /**
@@ -156,6 +169,12 @@ export abstract class BaseEnemy
   protected faceVelocity(velocityX: number): void {
     if (velocityX < 0) this.facingValue = "left";
     if (velocityX > 0) this.facingValue = "right";
+  }
+
+  updateVisual(): void {
+    this.characterImage
+      .setPosition(this.x, this.y + this.visualOffsetYPx)
+      .setFlipX(this.facingValue === "right");
   }
 
   protected recoverFromHurt(nextState: EnemyState): boolean {

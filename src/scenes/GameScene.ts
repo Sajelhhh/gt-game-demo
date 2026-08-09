@@ -16,6 +16,7 @@ import {
 import { Player } from "../entities/Player";
 import { ChaseEnemy, PatrolEnemy } from "../entities/enemies";
 import type { GameConfig } from "../game/config";
+import { CHARACTER_TEXTURE } from "../game/assets";
 import { KeyboardAttackInput } from "../input/AttackInput";
 import { LEVEL_01, validateLevelLayout } from "../level/level01";
 import {
@@ -35,18 +36,30 @@ const PLAYER_VISUAL = {
   widthPx: 32,
   heightPx: 48,
   color: 0xa7f3d0,
+  textureKey: CHARACTER_TEXTURE.PLAYER,
+  displayWidthPx: 48,
+  displayHeightPx: 58,
+  offsetYPx: 2,
 } as const;
 
 const PATROL_VISUAL = {
   widthPx: 38,
   heightPx: 34,
   color: 0xfbbf24,
+  textureKey: CHARACTER_TEXTURE.PATROL_ENEMY,
+  displayWidthPx: 56,
+  displayHeightPx: 42,
+  offsetYPx: -2,
 } as const;
 
 const CHASE_VISUAL = {
   widthPx: 42,
   heightPx: 42,
   color: 0xc084fc,
+  textureKey: CHARACTER_TEXTURE.CHASE_ENEMY,
+  displayWidthPx: 62,
+  displayHeightPx: 48,
+  offsetYPx: -3,
 } as const;
 
 const ENEMY_SPAWNS = [
@@ -131,6 +144,7 @@ export class GameScene extends Phaser.Scene {
       this.player.update(nowMs, deltaMs);
     }
     this.playerDamage.updatePresentation(nowMs);
+    this.player.updateVisual();
 
     for (const enemy of this.enemies) {
       if (enemy instanceof PatrolEnemy) enemy.update();
@@ -142,6 +156,7 @@ export class GameScene extends Phaser.Scene {
       );
       this.tryChaseAttack(enemy, nowMs);
     }
+    for (const enemy of this.enemies) enemy.updateVisual();
 
     const attack = this.playerCombat.update(nowMs, {
       id: this.playerDamage.id,
@@ -166,7 +181,7 @@ export class GameScene extends Phaser.Scene {
     this.worldLayer = level.world;
 
     this.add
-      .text(100, 120, "A / D 移动 · SPACE 跳跃 · J 攻击", {
+      .text(100, 120, "A / D 移动 · SPACE 二段跳 · J 攻击", {
         color: "#c8d4b8",
         fontFamily: "system-ui, sans-serif",
         fontSize: "25px",

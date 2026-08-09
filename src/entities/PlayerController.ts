@@ -25,12 +25,15 @@ export class PlayerController {
   private readonly stateMachine = createPlayerStateMachine();
   private lastGroundedAtMs = Number.NEGATIVE_INFINITY;
   private jumpRequestedAtMs = Number.NEGATIVE_INFINITY;
+  private remainingAirJumps: number;
 
   constructor(
     private readonly body: PlayerBody,
     private readonly input: PlayerInput,
     private readonly config: Readonly<GameConfig["player"]>,
-  ) {}
+  ) {
+    this.remainingAirJumps = config.airJumps;
+  }
 
   get state(): PlayerState {
     return this.stateMachine.state;
@@ -40,7 +43,10 @@ export class PlayerController {
     const frame = this.input.read();
     const deltaSeconds = Math.max(0, deltaMs) / 1000;
 
-    if (this.body.grounded) this.lastGroundedAtMs = nowMs;
+    if (this.body.grounded) {
+      this.lastGroundedAtMs = nowMs;
+      this.remainingAirJumps = this.config.airJumps;
+    }
     if (frame.jumpPressed) this.jumpRequestedAtMs = nowMs;
 
     this.updateHorizontal(frame, deltaSeconds);
@@ -50,9 +56,16 @@ export class PlayerController {
     const hasBufferedJump =
       nowMs - this.jumpRequestedAtMs <= this.config.jumpBufferTimeMs;
 
-    const jumped = canUseCoyoteTime && hasBufferedJump;
+    const usedGroundJump = canUseCoyoteTime && hasBufferedJump;
+    const usedAirJump =
+      !canUseCoyoteTime &&
+      hasBufferedJump &&
+      frame.jumpPressed &&
+      this.remainingAirJumps > 0;
+    const jumped = usedGroundJump || usedAirJump;
     if (jumped) {
       this.body.setVelocityY(-this.config.jumpSpeedPxPerSecond);
+      if (usedAirJump) this.remainingAirJumps -= 1;
       this.lastGroundedAtMs = Number.NEGATIVE_INFINITY;
       this.jumpRequestedAtMs = Number.NEGATIVE_INFINITY;
     } else if (frame.jumpReleased && this.body.velocityY < 0) {

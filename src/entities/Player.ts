@@ -10,6 +10,10 @@ export type PlayerVisual = Readonly<{
   widthPx: number;
   heightPx: number;
   color: number;
+  textureKey: string;
+  displayWidthPx: number;
+  displayHeightPx: number;
+  offsetYPx: number;
 }>;
 
 class ArcadePlayerBody implements PlayerBody {
@@ -42,6 +46,8 @@ class ArcadePlayerBody implements PlayerBody {
  */
 export class Player extends Phaser.GameObjects.Rectangle {
   private readonly controller: PlayerController;
+  private readonly characterImage: Phaser.GameObjects.Image;
+  private readonly visualOffsetYPx: number;
   private facingValue: Facing = "right";
 
   constructor(
@@ -52,9 +58,14 @@ export class Player extends Phaser.GameObjects.Rectangle {
     visual: PlayerVisual,
     input?: PlayerInput,
   ) {
-    super(scene, x, y, visual.widthPx, visual.heightPx, visual.color);
+    super(scene, x, y, visual.widthPx, visual.heightPx, visual.color, 0);
     scene.add.existing(this);
     scene.physics.add.existing(this);
+    this.visualOffsetYPx = visual.offsetYPx;
+    this.characterImage = scene.add
+      .image(x, y + visual.offsetYPx, visual.textureKey)
+      .setDisplaySize(visual.displayWidthPx, visual.displayHeightPx)
+      .setDepth(5);
 
     const arcadeBody = this.body;
     if (!(arcadeBody instanceof Phaser.Physics.Arcade.Body)) {
@@ -94,6 +105,29 @@ export class Player extends Phaser.GameObjects.Rectangle {
     // position immediately rather than through Arcade's world step.
     if (this.x < previousX) this.facingValue = "left";
     if (this.x > previousX) this.facingValue = "right";
+    this.updateVisual();
+  }
+
+  updateVisual(): void {
+    this.characterImage
+      .setPosition(this.x, this.y + this.visualOffsetYPx)
+      .setFlipX(this.facingValue === "left");
+  }
+
+  setPresentationAlpha(alpha: number): void {
+    this.characterImage.setAlpha(alpha);
+  }
+
+  setHurtVisual(hurt: boolean): void {
+    if (hurt) {
+      this.characterImage.setTint(0xff9b9b);
+    } else {
+      this.characterImage.clearTint();
+    }
+  }
+
+  setCharacterVisible(visible: boolean): void {
+    this.characterImage.setVisible(visible);
   }
 
   private get arcadeBody(): Phaser.Physics.Arcade.Body {

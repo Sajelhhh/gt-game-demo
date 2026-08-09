@@ -18,6 +18,7 @@ describe("DEFAULT_GAME_CONFIG", () => {
     expect(DEFAULT_GAME_CONFIG.player.maxHealth).toBe(5);
     expect(DEFAULT_GAME_CONFIG.player.moveSpeedPxPerSecond).toBe(220);
     expect(DEFAULT_GAME_CONFIG.player.jumpSpeedPxPerSecond).toBe(430);
+    expect(DEFAULT_GAME_CONFIG.player.airJumps).toBe(1);
     expect(DEFAULT_GAME_CONFIG.combat.playerMelee.cooldownMs).toBe(350);
     expect(DEFAULT_GAME_CONFIG.level.id).toBe("level-01");
     expect(validateGameConfig(DEFAULT_GAME_CONFIG)).toEqual([]);

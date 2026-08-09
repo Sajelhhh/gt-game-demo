@@ -33,7 +33,7 @@ export class MenuScene extends Phaser.Scene {
       .text(
         widthPx / 2,
         heightPx / 2 + 31,
-        "A / D 或 ← / → 移动  ·  Space / W 跳跃  ·  J / X 攻击  ·  Esc 暂停",
+        "A / D 或 ← / → 移动  ·  Space / W 二段跳  ·  J / X 攻击  ·  Esc 暂停",
         {
           color: "#d5dbea",
           fontFamily: "system-ui, sans-serif",

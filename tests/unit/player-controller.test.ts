@@ -40,14 +40,14 @@ class FakeBody implements PlayerBody {
   }
 }
 
-const setup = () => {
+const setup = (
+  config: Readonly<
+    (typeof DEFAULT_GAME_CONFIG)["player"]
+  > = DEFAULT_GAME_CONFIG.player,
+) => {
   const body = new FakeBody();
   const input = new FakeInput();
-  const controller = new PlayerController(
-    body,
-    input,
-    DEFAULT_GAME_CONFIG.player,
-  );
+  const controller = new PlayerController(body, input, config);
   return { body, input, controller };
 };
 
@@ -94,7 +94,10 @@ describe("PlayerController", () => {
   });
 
   it("consumes a buffered jump when the player lands", () => {
-    const { body, input, controller } = setup();
+    const { body, input, controller } = setup({
+      ...DEFAULT_GAME_CONFIG.player,
+      airJumps: 0,
+    });
     body.grounded = false;
     body.velocityY = 100;
     input.frame = { ...neutralInput, jumpPressed: true };
@@ -113,8 +116,50 @@ describe("PlayerController", () => {
     expect(controller.state).toBe(PLAYER_STATE.JUMP);
   });
 
-  it("expires coyote time and the input buffer", () => {
+  it("allows exactly one air jump and resets it after landing", () => {
     const { body, input, controller } = setup();
+    controller.update(0, 16);
+
+    input.frame = { ...neutralInput, jumpPressed: true };
+    controller.update(16, 16);
+    expect(body.velocityY).toBe(
+      -DEFAULT_GAME_CONFIG.player.jumpSpeedPxPerSecond,
+    );
+
+    body.grounded = false;
+    body.velocityY = 120;
+    input.frame = neutralInput;
+    controller.update(32, 16);
+    input.frame = { ...neutralInput, jumpPressed: true };
+    controller.update(48, 16);
+    expect(body.velocityY).toBe(
+      -DEFAULT_GAME_CONFIG.player.jumpSpeedPxPerSecond,
+    );
+
+    body.velocityY = 120;
+    input.frame = neutralInput;
+    controller.update(64, 16);
+    input.frame = { ...neutralInput, jumpPressed: true };
+    controller.update(80, 16);
+    expect(body.velocityY).toBe(120);
+
+    body.grounded = true;
+    input.frame = neutralInput;
+    controller.update(200, 16);
+    body.grounded = false;
+    body.velocityY = 120;
+    input.frame = { ...neutralInput, jumpPressed: true };
+    controller.update(400, 16);
+    expect(body.velocityY).toBe(
+      -DEFAULT_GAME_CONFIG.player.jumpSpeedPxPerSecond,
+    );
+  });
+
+  it("expires coyote time and the input buffer", () => {
+    const { body, input, controller } = setup({
+      ...DEFAULT_GAME_CONFIG.player,
+      airJumps: 0,
+    });
     controller.update(0, 16);
     body.grounded = false;
     body.velocityY = 20;

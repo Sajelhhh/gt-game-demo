@@ -52,7 +52,7 @@ export class UIScene extends Phaser.Scene {
     this.add.text(
       24,
       20,
-      "A/D 移动 · Space 跳跃 · J 攻击 · Esc 暂停",
+      "A/D 移动 · Space 二段跳 · J 攻击 · Esc 暂停",
       labelStyle,
     );
     this.healthText = this.add

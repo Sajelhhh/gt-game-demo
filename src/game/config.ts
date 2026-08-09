@@ -19,6 +19,7 @@ export interface GameConfig {
     readonly accelerationPxPerSecondSquared: number;
     readonly groundDragPxPerSecondSquared: number;
     readonly jumpSpeedPxPerSecond: number;
+    readonly airJumps: number;
     readonly coyoteTimeMs: number;
     readonly jumpBufferTimeMs: number;
     readonly releasedJumpVelocityFactor: number;
@@ -105,6 +106,7 @@ const DEFAULTS = {
     accelerationPxPerSecondSquared: 1600,
     groundDragPxPerSecondSquared: 1800,
     jumpSpeedPxPerSecond: 430,
+    airJumps: 1,
     coyoteTimeMs: 100,
     jumpBufferTimeMs: 100,
     releasedJumpVelocityFactor: 0.5,
@@ -228,6 +230,9 @@ export const validateGameConfig = (config: GameConfig): readonly string[] => {
   }
   if (config.level.targetDurationMaxMs < config.level.targetDurationMinMs) {
     errors.push("level target duration range is invalid");
+  }
+  if (!Number.isInteger(config.player.airJumps)) {
+    errors.push("player.airJumps must be an integer");
   }
 
   return errors;

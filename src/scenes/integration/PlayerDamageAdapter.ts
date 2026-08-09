@@ -10,9 +10,6 @@ import type {
 import type { GameConfig } from "../../game/config";
 import type { Player } from "../../entities/Player";
 
-const PLAYER_COLOR = 0xa7f3d0;
-const PLAYER_HURT_COLOR = 0xfca5a5;
-
 /**
  * Keeps health and damage concerns out of the movement-only Player entity.
  * GameScene owns this adapter for exactly the same lifetime as the player.
@@ -70,24 +67,28 @@ export class PlayerDamageAdapter implements Damageable {
   }
 
   enterHurtState(): void {
-    this.player.setFillStyle(PLAYER_HURT_COLOR);
+    this.player.setHurtVisual(true);
   }
 
   enterDeadState(): void {
     this.arcadeBody.setVelocity(0, 0);
     this.arcadeBody.enable = false;
     this.player.setActive(false).setVisible(false);
+    this.player.setCharacterVisible(false);
   }
 
   updatePresentation(nowMs: number): void {
     if (!this.isAlive()) return;
 
     if (this.isInvulnerable(nowMs)) {
-      this.player.setAlpha(Math.floor(nowMs / 90) % 2 === 0 ? 0.35 : 1);
+      this.player.setPresentationAlpha(
+        Math.floor(nowMs / 90) % 2 === 0 ? 0.35 : 1,
+      );
       return;
     }
 
-    this.player.setAlpha(1).setFillStyle(PLAYER_COLOR);
+    this.player.setPresentationAlpha(1);
+    this.player.setHurtVisual(false);
   }
 
   relocate(position: Vec2): void {

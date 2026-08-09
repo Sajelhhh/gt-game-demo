@@ -47,6 +47,31 @@ vi.mock("phaser", () => {
     }
   }
 
+  class Image {
+    x = 0;
+    y = 0;
+    visible = true;
+
+    setDisplaySize() {
+      return this;
+    }
+    setDepth() {
+      return this;
+    }
+    setPosition(x: number, y: number) {
+      this.x = x;
+      this.y = y;
+      return this;
+    }
+    setFlipX() {
+      return this;
+    }
+    setVisible(visible: boolean) {
+      this.visible = visible;
+      return this;
+    }
+  }
+
   class GeomRectangle {
     constructor(
       readonly x: number,
@@ -58,7 +83,7 @@ vi.mock("phaser", () => {
 
   return {
     default: {
-      GameObjects: { Rectangle },
+      GameObjects: { Rectangle, Image },
       Physics: { Arcade: { Body } },
       Geom: { Rectangle: GeomRectangle },
     },
@@ -81,7 +106,13 @@ type TestBody = {
 };
 
 const scene = {
-  add: { existing: vi.fn() },
+  add: {
+    existing: vi.fn(),
+    image: vi.fn(
+      () =>
+        new Phaser.GameObjects.Image({} as Phaser.Scene, 0, 0, "test-enemy"),
+    ),
+  },
   physics: {
     add: {
       existing: (object: { body?: unknown }) => {
@@ -94,7 +125,15 @@ const scene = {
   },
 };
 
-const visual = { widthPx: 32, heightPx: 32, color: 0x00ff00 };
+const visual = {
+  widthPx: 32,
+  heightPx: 32,
+  color: 0x00ff00,
+  textureKey: "test-enemy",
+  displayWidthPx: 40,
+  displayHeightPx: 36,
+  offsetYPx: 0,
+};
 
 const patrol = (id: string, initialDirection: -1 | 1 = -1) =>
   new PatrolEnemy(
