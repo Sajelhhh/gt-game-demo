@@ -1,6 +1,6 @@
 # Shadow Sprout 公共架构契约（MVP）
 
-> 状态：**Q0 冻结**
+> 状态：**Q0 冻结；2026-08-10 按小 Demo 范围增量同步**
 >
 > 适用范围：MVP（`level-01`）
 >
@@ -34,12 +34,14 @@ src/
 main
   ├─> game/config + game/GameEventBus
   └─> scenes（组合根）
-         ├─> entities ─> components + contracts + config + system interfaces
-         ├─> systems  ─> components + contracts + config + TypedEventBus interface
+         ├─> entities/adapters ─> application ports + components + contracts + config
+         ├─> combat/systems ─> components + contracts + config + narrow ports
+         ├─> input adapters ─> input ports + config
          ├─> level    ─> contracts + config
          └─> ui       ─> contracts + config + TypedEventBus interface
 
 components ─> contracts + config
+application rules ─> components + contracts + config + narrow ports
 contracts  ─> （无项目内依赖）
 config     ─> contracts
 ```
@@ -48,11 +50,13 @@ config     ─> contracts
 
 - `main.ts` 创建配置、事件总线和 Scene，是唯一应用组合根。
 - `GameScene` 只创建对象、注入依赖、注册 collider/overlap 和协调游戏流程，不实现移动、AI、扣血或 HUD 细节。
+- Arcade Physics callback 只采集碰撞候选；`CombatCoordinator` 使用可暂停时钟按玩家有效攻击、敌人攻击、延迟接触伤害的顺序裁决，禁止让引擎 callback 顺序决定互换优先级。
 - `entities` 不得互相导入具体类。Player 不导入 Enemy，Enemy 不导入 Player；交互对象以 `EntityId`、领域接口或事件表示。
 - `entities` 只能依赖 system 的接口，不能 new 或导入具体 system 实现。
 - `systems` 不得导入 `Player`、`PatrolEnemy`、`ChaseEnemy`、Scene、UI 或 level 的具体实现。`DamageSystem` 只面向 `Damageable` 接口。
 - `components`、`contracts`、`game/config.ts` 不依赖 Phaser。Phaser 类型只能留在 Scene、实体表现、level loader 或 `GameEventBus` 适配器边界。
 - `ui` 通过事件读写游戏状态，不直接修改 Health、实体、Scene 物理状态或音频节点。
+- `UIScene`/交互层是 `restart-requested` 的唯一 emitter；`GameScene` 只消费该事件。失败重开使用最近检查点，通关重开使用关卡起点。
 - 模块之间禁止循环 import。需要反向通知时使用 `TypedEventBus` 或由 Scene 注入的窄接口。
 
 ### 2.2 模块所有权
@@ -64,10 +68,12 @@ config     ─> contracts
 | `src/scenes/` | 生命周期、对象装配、碰撞注册、流程切换 | Foundation / 集成任务 | 移动、伤害、AI 的具体规则 |
 | `src/entities/Player.ts` | 玩家表现与组件组合 | Player | 敌人 AI、直接扣敌人血 |
 | `src/entities/enemies/` | 对应敌人的表现与 AI 适配 | Enemy | 玩家输入、直接扣玩家血 |
+| `src/combat/` | 攻击生命周期、命中去重、接触保护与战斗优先级 | Combat | Phaser 表现、直接修改 Health |
+| `src/input/` | 输入 port 与 Phaser 键盘适配 | Player / Combat | 玩法状态、Scene 流程 |
 | `src/systems/` | 按名称对应的单一领域规则 | 对应 feature owner | 具体实体类判断、Scene/UI 操作 |
 | `src/components/` | 可复用、尽量纯 TypeScript 的状态容器 | 首个需求 owner，公共评审 | 资源加载、全局事件监听 |
 | `src/level/` | Tilemap、出生点、检查点和终点数据 | Level | HUD、输入、生命值写入 |
-| `src/ui/`、`UIScene` | HUD、菜单、暂停/失败/通关交互 | UI/Audio | 直接改变物理、AI 或实体组件 |
+| `src/ui/`、`UIScene` | HUD、菜单、暂停/失败/通关交互 | UI | 直接改变物理、AI 或实体组件 |
 
 公共文件的变更由其实施 owner 提交，但必须同步本文；其他 feature owner 不得在自己的模块中复制公共常量。
 
@@ -108,6 +114,7 @@ interface GameConfig {
     readonly accelerationPxPerSecondSquared: 1600;
     readonly groundDragPxPerSecondSquared: 1800;
     readonly jumpSpeedPxPerSecond: 430;
+    readonly airJumps: 1;
     readonly coyoteTimeMs: 100;
     readonly jumpBufferTimeMs: 100;
     readonly releasedJumpVelocityFactor: 0.5;
@@ -125,6 +132,13 @@ interface GameConfig {
       readonly hitboxHeightPx: 24;
       readonly knockbackXPxPerSecond: 180;
       readonly knockbackYPxPerSecond: 140;
+      readonly shockwaveDurationMs: 220;
+      readonly shockwaveTravelPx: 58;
+      readonly shockwaveRadiusPx: 24;
+      readonly hitSparkDurationMs: 170;
+      readonly contactGuardMs: 260;
+      readonly enemyHitStunMs: 180;
+      readonly targetInvulnerabilityMs: 180;
     };
     readonly contactKnockbackXPxPerSecond: 160;
     readonly contactKnockbackYPxPerSecond: 120;
@@ -163,8 +177,8 @@ interface GameConfig {
   };
   readonly level: {
     readonly id: 'level-01';
-    readonly targetDurationMinMs: 180000;
-    readonly targetDurationMaxMs: 300000;
+    readonly targetDurationMinMs: 60000;
+    readonly targetDurationMaxMs: 120000;
     readonly offscreenSleepMarginPx: 128;
   };
   readonly audio: {
@@ -214,8 +228,9 @@ interface Damageable {
   isAlive(): boolean;
   isInvulnerable(atMs: number): boolean;
   commitDamage(amount: number): HealthChange;
-  grantInvulnerability(untilMs: number): void;
+  grantInvulnerability(untilMs: number, startedAtMs?: number): void;
   applyKnockback(velocity: Vec2): void;
+  enterHurtState(): void;
   enterDeadState(): void;
 }
 ```
@@ -276,7 +291,7 @@ const GAME_FLOW_STATE = {
 | `failed` | `playing`（处理 restart 后的新关卡生命周期） |
 | `completed` | `playing`（处理 restart 后的新关卡生命周期） |
 
-`GameScene` 独占流程状态。进入 `paused` 必须暂停物理、AI、动画驱动计时器和关卡计时；关卡 elapsed time 使用 Scene clock，因此不含暂停时长。进入 `completed` 后禁用移动和战斗输入。
+`GameScene` 独占流程状态。进入 `paused` 必须暂停物理、AI、动画、Tween、攻击冷却、无敌窗和关卡计时；关卡 elapsed time 使用可暂停 gameplay clock，因此不含暂停时长。进入 `completed` 后禁用移动和战斗输入。
 
 ## 5. 类型化事件契约
 
@@ -373,7 +388,7 @@ interface GameEventMap {
 
 | 事件 | 唯一 emitter | 主要 listener |
 |---|---|---|
-| `attack-started` | `CombatSystem`（冷却检查通过且状态进入 attack 后） | 实体表现、AudioSystem、统计 |
+| `attack-started` | `PlayerCombat` / 敌人战斗控制器（冷却检查通过且状态进入 attack 后） | 实体表现、AudioSystem、统计 |
 | `damage-applied` | `DamageSystem` | 表现、AudioSystem、统计 |
 | `health-changed` | `DamageSystem`（包括出生/重生初始化） | HUD、实体表现 |
 | `entity-died` | `DamageSystem` | GameScene、Checkpoint/统计、AudioSystem |
@@ -384,6 +399,8 @@ interface GameEventMap {
 | `audio-settings-changed` | UIScene / 设置交互层 | AudioSystem、设置 UI |
 
 成功伤害的固定原子顺序：校验 target 存活与无敌窗 → `Health` 提交新值 → 施加击退/无敌窗 → emit `damage-applied` → emit `health-changed` → 若为 0，状态转 `dead` 并 emit `entity-died`。被无敌窗、死亡状态或重复 attack-target 拒绝的伤害不发以上事件。出生/重生初始化发一次 `health-changed`，其 `previousHealth` 与 `currentHealth` 均为满血、`delta=0`、cause 分别为 `spawn`/`respawn`。
+
+每个 `playing` tick 的裁决顺序固定为：Arcade Physics callback 收集碰撞候选 → 推进可暂停 gameplay clock → 读取输入与移动 → 玩家攻击有效帧/每目标接触保护 → 敌人 AI 与有效攻击帧 → 延迟结算剩余接触伤害 → 发布表现事件。正面有效攻击只保护该次覆盖的目标；背后或未命中敌人仍可伤害玩家。
 
 攻击只有在冷却通过时发一次 `attack-started`。攻击 hitbox 只在配置的闭区间 `[activeFrameStart, activeFrameEnd]` 启用，并在 attack 状态退出、Scene shutdown 或实体销毁时强制关闭。
 
@@ -450,8 +467,8 @@ Scene 只能按下表注册交互；具体回调委托给 system。未列出的�
 | `World` | `Enemy` | collider | Arcade 分离；Enemy AI 读取墙/地面结果 |
 | `Hazard` | `Player` | overlap | DamageSystem（spike）或 CheckpointSystem（pit reset） |
 | `Player` | `Enemy` | overlap | DamageSystem，cause=`enemy-contact` |
-| `PlayerAttack` | `Enemy` | overlap | CombatSystem 去重后调用 DamageSystem |
-| `EnemyAttack` | `Player` | overlap | CombatSystem 去重后调用 DamageSystem |
+| `PlayerAttack` | `Enemy` | overlap | CombatCoordinator 去重后调用 DamageSystem |
+| `EnemyAttack` | `Player` | overlap | CombatCoordinator 去重后调用 DamageSystem |
 
 攻击 group 不与 `World` 碰撞，敌人默认不受 `Hazard` 伤害，Player/Enemy 之间不做实体分离。深坑触发 cause=`pit`：扣 1 点生命并把玩家移到当前检查点；若该次伤害使生命为 0，则进入失败流程而不执行存活重定位。地刺 cause=`spike`，使用玩家无敌窗避免连续扣血。
 

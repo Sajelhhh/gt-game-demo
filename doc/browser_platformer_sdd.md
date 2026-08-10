@@ -7,7 +7,7 @@
 
 本规范用于指导 Gastown 中的 Agent 团队并行开发一款可直接在现代浏览器运行的 2D 横版动作游戏。游戏应支持移动、跳跃、躲避障碍，以及与一种以上的小怪战斗。
 
-本阶段目标是完成一个 3～5 分钟可通关的 MVP，而不是制作完整类银河战士恶魔城游戏。
+本阶段目标是完成一个 1～2 分钟可通关、可反复试玩的小 Demo，而不是制作完整类银河战士恶魔城游戏。音频精修、深度性能优化和完整发布矩阵属于 Post-MVP。
 
 ## 2. 产品目标
 
@@ -23,9 +23,9 @@
 
 - 首次加载后 5 秒内可操作（普通桌面网络环境）。
 - 新玩家无需说明即可在 30 秒内完成移动、跳跃和攻击。
-- 完整关卡可在 3～5 分钟内通关。
-- Chrome、Edge、Safari、Firefox 最新两个主版本可运行。
-- 游戏主循环稳定在 60 FPS；中端设备最低不低于 45 FPS。
+- 完整关卡可在 1～2 分钟内通关。
+- MVP 以 Chromium 自动化验收为发布门禁；Chrome、Edge、Safari、Firefox 最新两个主版本兼容属于 Post-MVP 发布验收。
+- MVP 保持流畅且无明显卡顿；60 FPS、最低 45 FPS 的固定基准测量属于 Post-MVP 发布验收。
 
 ## 3. 范围
 
@@ -39,7 +39,6 @@
 - 玩家生命值、敌人生命值、终点和检查点。
 - 简单 HUD、开始界面、暂停、失败和通关界面。
 - 占位素材或原创简易素材。
-- 基础音效和背景音乐开关。
 
 ### 3.2 MVP 范围外
 
@@ -48,6 +47,9 @@
 - 多关卡、复杂剧情、装备、技能树、Boss。
 - 程序生成地图。
 - 手柄适配。
+- 基础音效、背景音乐和独立音量开关（Post-MVP 增强）。
+- 对象池、离屏 AI 休眠和固定设备性能基准（Post-MVP 发布优化）。
+- 四浏览器完整兼容矩阵（Post-MVP 发布验收）。
 - 付费、广告和数据后台。
 
 ## 4. 用户故事与验收标准
@@ -121,8 +123,8 @@
 ### US-09 暂停与音频
 
 - `Esc` 暂停或恢复。
-- 暂停时物理、AI、计时器全部停止。
-- 玩家可分别开启或关闭音乐和音效。
+- 暂停时物理、AI、动画、Tween、冷却、无敌窗和关卡计时全部停止。
+- 玩家可分别开启或关闭音乐和音效（Post-MVP；不阻塞小 Demo）。
 
 ## 5. 游戏规则
 
@@ -179,8 +181,8 @@ MVP 仅包含一张线性关卡：
 
 ### 7.1 性能
 
-- 使用对象池管理攻击特效、粒子和可重复实体。
-- 视口外敌人允许降频或休眠。
+- 小 Demo 只允许数量有上限的短生命周期攻击特效；对象池在 Post-MVP 发布优化中完成。
+- 视口外敌人降频或休眠属于 Post-MVP 发布优化。
 - 首屏压缩资源目标不超过 10 MB。
 - 禁止在每帧循环中创建大量临时对象。
 
@@ -236,11 +238,9 @@ src/
     enemies/PatrolEnemy.ts
     enemies/ChaseEnemy.ts
   systems/
-    InputSystem.ts
-    CombatSystem.ts
     DamageSystem.ts
     CheckpointSystem.ts
-    AudioSystem.ts
+    AudioSystem.ts           # Post-MVP
   components/
     Health.ts
     Hitbox.ts
@@ -249,6 +249,14 @@ src/
     level01.json
     LevelLoader.ts
   ui/
+  combat/
+    AttackHitbox.ts
+    ContactGuard.ts
+    PlayerCombat.ts
+    CombatCoordinator.ts
+  input/
+    PlayerInput.ts
+    AttackInput.ts
   assets/
 tests/
   unit/
@@ -258,10 +266,12 @@ tests/
 ### 8.3 关键约束
 
 - `GameScene` 只负责编排，不堆积角色和战斗细节。
+- Arcade Physics 回调只收集碰撞候选；`CombatCoordinator` 按“玩家有效攻击 → 敌人攻击 → 延迟接触伤害”裁决，避免依赖引擎回调顺序。
 - 伤害统一通过 `DamageSystem.applyDamage()` 进入，禁止各实体直接修改对方生命值。
 - 玩家与敌人通过类型化事件通信；事件名、payload、唯一 emitter 和清理生命周期以公共架构契约第 5 节为准。
 - Arcade Physics 的 Tilemap 层必须命名为 `World`、`Hazard`；`Player`、`Enemy`、`PlayerAttack`、`EnemyAttack` 是 group/category 业务名，不是 Matter bitmask。完整矩阵以公共架构契约第 6 节为准。
 - 模块依赖只能沿公共架构契约第 2 节方向；system 不导入具体 Player/Enemy，公共 contracts/config 不依赖 Phaser。
+- `UIScene`/交互层是 `restart-requested` 的唯一 emitter；`GameScene` 只监听并按失败/通关语义重建生命周期。
 - 美术资源使用自制、CC0 或明确授权素材，并记录来源。
 
 ## 9. 测试规范
@@ -305,7 +315,8 @@ tests/
 - **Combat Agent**：攻击、Hitbox、伤害、击退、无敌帧。
 - **Enemy Agent**：巡逻敌人、追击敌人及 AI 状态机。
 - **Level Agent**：Tilemap、碰撞层、障碍、检查点和终点。
-- **UI/Audio Agent**：菜单、HUD、暂停、失败、通关和音频。
+- **UI Agent**：菜单、HUD、暂停、失败和通关。
+- **Audio Agent（Post-MVP）**：音效、背景音乐和独立开关。
 - **QA Agent**：测试、性能检查、浏览器兼容和验收报告。
 
 ### 10.2 队列与依赖
@@ -335,7 +346,8 @@ tests/
 - Enemy Agent：巡逻型敌人。
 - Enemy Agent：追击型敌人。
 - Level Agent：检查点、终点和完整关卡布局。
-- UI/Audio Agent：失败、通关、音效和音乐开关。
+- UI Agent：失败、通关和重新开始。
+- Audio Agent（Post-MVP）：音效和音乐开关。
 - QA Agent：为已稳定接口补充单元测试和 E2E。
 
 #### Queue 4：集成（串行门禁）
@@ -346,6 +358,8 @@ tests/
 - Q4-4 调整移动、跳跃、攻击和敌人数值。
 
 #### Queue 5：发布验收
+
+以下 Queue 5 项均为 Post-MVP，不阻塞小 Demo：
 
 - Q5-1 四个目标浏览器兼容检查。
 - Q5-2 性能、资源体积和控制台错误检查。
@@ -362,6 +376,8 @@ tests/
 
 ## 11. 首轮任务 Backlog
 
+本表保留首轮需求分解；实时状态、增量任务和依赖以 Beads epic `ei-4lk` 为唯一事实来源，不在 Markdown 中维护第二份执行状态。
+
 | ID | P | Owner | 任务 | 依赖 | 验收 |
 |---|---|---|---|---|---|
 | F-01 | P0 | Foundation | 初始化项目和开发脚本 | 无 | `dev/build/test` 可运行 |
@@ -374,10 +390,10 @@ tests/
 | E-02 | P0 | Enemy | 追击敌人 | C-01 | 感知后追击并攻击 |
 | L-01 | P0 | Level | Tilemap 与世界碰撞 | F-02 | 地面平台可碰撞 |
 | L-02 | P0 | Level | 地刺、深坑和检查点 | L-01,C-01 | 伤害与重生正确 |
-| L-03 | P0 | Level | 完整 MVP 关卡 | L-02,E-01,E-02 | 3～5 分钟可通关 |
-| U-01 | P1 | UI/Audio | HUD 与暂停 | F-02,C-01 | 血量同步，暂停冻结 |
-| U-02 | P1 | UI/Audio | 开始、失败、通关界面 | L-03 | 流程完整 |
-| A-01 | P1 | UI/Audio | 音效与音乐控制 | C-02,U-01 | 可独立开关 |
+| L-03 | P0 | Level | 完整 MVP 关卡 | L-02,E-01,E-02 | 1～2 分钟可通关 |
+| U-01 | P0 | UI | HUD 与暂停 | F-02,C-01 | 血量同步，暂停冻结 |
+| U-02 | P0 | UI | 开始、失败、通关界面 | L-03 | 流程完整 |
+| A-01 | P2 | Audio | 音效与音乐控制（Post-MVP） | C-02,U-01 | 可独立开关 |
 | T-01 | P0 | QA | 核心规则单元测试 | C-01 | 规定用例通过 |
 | T-02 | P0 | QA | 主流程 E2E | L-03,U-02 | 冒烟流程通过 |
 | R-01 | P0 | Lead | 集成与发布验收 | 全部 P0 | DoD 全部满足 |
@@ -391,3 +407,4 @@ tests/
 3. 玩家碰到敌人时造成 1 点接触伤害，统一进入 `DamageSystem`。
 4. 坠坑扣 1 点生命并回最近检查点；致死时进入失败流程。
 5. MVP 仅支持桌面键盘，不做移动端适配。
+6. 小 Demo 目标时长为 1～2 分钟；音频、对象池/离屏休眠和四浏览器发布矩阵不阻塞核心试玩。
