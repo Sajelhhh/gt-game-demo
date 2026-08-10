@@ -10,6 +10,8 @@ import type {
 import type { GameConfig } from "../../game/config";
 import { BaseEnemy, type EnemySpawn } from "./BaseEnemy";
 
+const ATTACK_FRAME_DURATION_MS = 1000 / 60;
+
 export type ChaseTarget = Readonly<{
   id: EntityId;
   position: Vec2;
@@ -22,6 +24,7 @@ export class ChaseEnemy extends BaseEnemy {
   private readonly homeX: number;
   private nextAttackAtMs = 0;
   private attackSequence = 0;
+  private attackStartedAtMs = Number.NEGATIVE_INFINITY;
   private pendingAttackId: string | null = null;
 
   constructor(
@@ -35,7 +38,20 @@ export class ChaseEnemy extends BaseEnemy {
 
   update(target: ChaseTarget, nowMs: number): void {
     if (!this.isAlive()) return;
+    if (this.isHurtStunned(nowMs)) {
+      this.pendingAttackId = null;
+      return;
+    }
     this.recoverFromHurt(ENEMY_STATE.IDLE);
+
+    if (this.enemyState === ENEMY_STATE.ATTACK) {
+      if (!this.isAttackExpired(nowMs)) {
+        this.arcadeBody.setVelocityX(0);
+        return;
+      }
+      this.pendingAttackId = null;
+      this.transitionTo(ENEMY_STATE.CHASE);
+    }
 
     const distanceToTarget = Math.abs(target.position.x - this.x);
     const currentlyEngaged =
@@ -87,7 +103,8 @@ export class ChaseEnemy extends BaseEnemy {
     if (
       !this.isAlive() ||
       this.enemyState !== ENEMY_STATE.ATTACK ||
-      this.pendingAttackId === null
+      this.pendingAttackId === null ||
+      !this.isAttackDamageWindowActive(nowMs)
     ) {
       return null;
     }
@@ -131,9 +148,27 @@ export class ChaseEnemy extends BaseEnemy {
     this.transitionTo(ENEMY_STATE.ATTACK);
     this.arcadeBody.setVelocityX(0);
     this.attackSequence += 1;
+    this.attackStartedAtMs = nowMs;
     this.pendingAttackId = `${this.id}:melee:${this.attackSequence}`;
     this.nextAttackAtMs =
       nowMs + this.gameConfig.enemies.chase.attackCooldownMs;
+  }
+
+  private isAttackDamageWindowActive(nowMs: number): boolean {
+    const elapsedMs = nowMs - this.attackStartedAtMs;
+    const config = this.gameConfig.enemies.chase;
+    return (
+      elapsedMs >= config.activeFrameStart * ATTACK_FRAME_DURATION_MS &&
+      elapsedMs < (config.activeFrameEnd + 1) * ATTACK_FRAME_DURATION_MS
+    );
+  }
+
+  private isAttackExpired(nowMs: number): boolean {
+    return (
+      nowMs - this.attackStartedAtMs >=
+      (this.gameConfig.enemies.chase.activeFrameEnd + 1) *
+        ATTACK_FRAME_DURATION_MS
+    );
   }
 
   private returnHome(): void {

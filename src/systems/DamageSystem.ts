@@ -58,7 +58,7 @@ export class DamageSystem {
 
     if (attackId !== null) this.rememberHit(attackId, target.id);
     target.applyKnockback({ ...knockbackVelocity });
-    target.grantInvulnerability(nowMs + invulnerabilityMs);
+    target.grantInvulnerability(nowMs + invulnerabilityMs, nowMs);
 
     this.eventBus.emit(GAME_EVENT.DAMAGE_APPLIED, {
       targetId: target.id,

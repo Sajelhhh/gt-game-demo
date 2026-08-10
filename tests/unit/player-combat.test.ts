@@ -114,7 +114,7 @@ describe("AttackHitbox", () => {
 });
 
 describe("PlayerCombat", () => {
-  it("starts on J/X input, emits the contract event, and exposes a flash", () => {
+  it("starts on J/X input, emits the contract event, and exposes its hitbox", () => {
     const { input, bus, combat } = setup();
     const started = vi.fn();
     bus.on("attack-started", started);
@@ -126,7 +126,6 @@ describe("PlayerCombat", () => {
       attackId: "player-1:melee:1",
       active: false,
       hitbox: { center: { x: 128, y: 80 }, widthPx: 36, heightPx: 24 },
-      flash: { alpha: 0.3 },
     });
     expect(started).toHaveBeenCalledWith({
       attackId: "player-1:melee:1",
@@ -196,6 +195,40 @@ describe("PlayerCombat", () => {
 
     input.pressed = true;
     expect(combat.update(350, source)?.attackId).toBe("player-1:melee:2");
+  });
+
+  it("uses enemy invulnerability shorter than the next melee cooldown", () => {
+    const { input, combat } = setup();
+    const enemy = new TestEnemy("enemy-1");
+
+    input.pressed = true;
+    combat.update(0, source);
+    expect(combat.tryHit(enemy, targetBounds, 20)).toMatchObject({
+      attempted: true,
+      result: { applied: true },
+    });
+
+    input.pressed = true;
+    combat.update(350, source);
+    expect(combat.tryHit(enemy, targetBounds, 370)).toMatchObject({
+      attempted: true,
+      result: { applied: true },
+    });
+    expect(enemy.getHealth().currentHealth).toBe(3);
+  });
+
+  it("consumes but does not start attacks while player control is locked", () => {
+    const { input, bus, combat } = setup();
+    const started = vi.fn();
+    bus.on("attack-started", started);
+
+    input.pressed = true;
+    expect(combat.update(0, source, false)).toBeNull();
+    expect(started).not.toHaveBeenCalled();
+
+    input.pressed = true;
+    expect(combat.update(1, source, true)?.attackId).toBe("player-1:melee:1");
+    expect(started).toHaveBeenCalledTimes(1);
   });
 
   it("snapshots facing and applies leftward knockback for a left attack", () => {

@@ -33,7 +33,7 @@ export interface Damageable {
   isAlive(): boolean;
   isInvulnerable(atMs: number): boolean;
   commitDamage(amount: number): HealthChange;
-  grantInvulnerability(untilMs: number): void;
+  grantInvulnerability(untilMs: number, startedAtMs?: number): void;
   applyKnockback(velocity: Vec2): void;
   enterHurtState(): void;
   enterDeadState(): void;

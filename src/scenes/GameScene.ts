@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 
+import { AttackHitbox } from "../combat/AttackHitbox";
+import { ContactGuard } from "../combat/ContactGuard";
 import { PlayerCombat, type AttackPresentation } from "../combat/PlayerCombat";
 import {
   GAME_EVENT,
@@ -102,7 +104,8 @@ export class GameScene extends Phaser.Scene {
   private checkpointSystem!: CheckpointSystem;
   private hazardInteraction!: HazardInteraction;
   private playerCombat!: PlayerCombat;
-  private attackFlash!: Phaser.GameObjects.Rectangle;
+  private readonly contactGuard = new ContactGuard();
+  private readonly pendingEnemyContacts = new Set<PatrolEnemy | ChaseEnemy>();
   private lastShockwaveAttackId: string | null = null;
   private gameplayElapsedMs = 0;
   private defeatedEnemyCount = 0;
@@ -123,6 +126,8 @@ export class GameScene extends Phaser.Scene {
     this.gameplayElapsedMs = 0;
     this.defeatedEnemyCount = 0;
     this.lastShockwaveAttackId = null;
+    this.contactGuard.clear();
+    this.pendingEnemyContacts.clear();
     this.enemies = [];
     this.chaseEnemies = [];
     document.querySelector("#game")?.setAttribute("data-scene", "game");
@@ -142,14 +147,27 @@ export class GameScene extends Phaser.Scene {
     this.gameplayElapsedMs += Math.max(0, deltaMs);
     const nowMs = this.gameplayElapsedMs;
 
-    if (!this.playerDamage.isControlLocked(nowMs)) {
+    const controlLocked = this.playerDamage.isControlLocked(nowMs);
+    if (!controlLocked) {
       this.player.update(nowMs, deltaMs);
     }
     this.playerDamage.updatePresentation(nowMs);
     this.player.updateVisual();
 
+    const attack = this.playerCombat.update(
+      nowMs,
+      {
+        id: this.playerDamage.id,
+        position: this.playerDamage.position,
+        facing: this.player.facing,
+      },
+      !controlLocked,
+    );
+    this.updateAttackEffects(attack);
+    if (attack?.active) this.resolvePlayerAttack(nowMs);
+
     for (const enemy of this.enemies) {
-      if (enemy instanceof PatrolEnemy) enemy.update();
+      if (enemy instanceof PatrolEnemy) enemy.update(nowMs);
     }
     for (const enemy of this.chaseEnemies) {
       enemy.update(
@@ -159,14 +177,7 @@ export class GameScene extends Phaser.Scene {
       this.tryChaseAttack(enemy, nowMs);
     }
     for (const enemy of this.enemies) enemy.updateVisual();
-
-    const attack = this.playerCombat.update(nowMs, {
-      id: this.playerDamage.id,
-      position: this.playerDamage.position,
-      facing: this.player.facing,
-    });
-    this.updateAttackFlash(attack);
-    if (attack?.active) this.resolvePlayerAttack(nowMs);
+    this.resolvePendingEnemyContacts(nowMs);
   }
 
   private createLevel(): LoadedLevel {
@@ -227,11 +238,6 @@ export class GameScene extends Phaser.Scene {
       this.eventBus,
       this.gameConfig.combat.playerMelee,
     );
-    this.attackFlash = this.add
-      .rectangle(0, 0, 1, 1, 0xf8fafc, 0.7)
-      .setDepth(6)
-      .setVisible(false);
-
     this.physics.add.collider(this.player.worldCollisionTarget, level.world);
     this.createEnemies(level.world);
     this.registerLevelInteractions(level);
@@ -275,7 +281,7 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.overlap(
         this.player.worldCollisionTarget,
         enemy.contactCollisionTarget,
-        () => this.handleEnemyContact(enemy),
+        () => this.pendingEnemyContacts.add(enemy),
       );
     }
   }
@@ -325,29 +331,45 @@ export class GameScene extends Phaser.Scene {
   private resolvePlayerAttack(nowMs: number): void {
     for (const enemy of this.enemies) {
       if (!enemy.isAlive()) continue;
-      this.playerCombat.tryHit(enemy, this.getDamageableBounds(enemy), nowMs);
+      const attempt = this.playerCombat.tryHit(
+        enemy,
+        this.getDamageableBounds(enemy),
+        nowMs,
+      );
+      if (!attempt.attempted) continue;
+
+      this.contactGuard.grant(
+        enemy.id,
+        nowMs,
+        this.gameConfig.combat.playerMelee.contactGuardMs,
+      );
+      this.createEnemyHitSpark(enemy.position, this.player.facing);
     }
   }
 
-  private handleEnemyContact(enemy: PatrolEnemy | ChaseEnemy): void {
-    if (
-      this.flow.state !== GAME_FLOW_STATE.PLAYING ||
-      !enemy.isAlive() ||
-      !this.playerDamage.isAlive()
-    ) {
-      return;
-    }
+  private resolvePendingEnemyContacts(nowMs: number): void {
+    const contacts = [...this.pendingEnemyContacts];
+    this.pendingEnemyContacts.clear();
 
-    this.damageSystem.applyDamage(
-      enemy.createContactDamageRequest(
-        this.playerDamage,
-        this.gameplayElapsedMs,
-      ),
-    );
+    for (const enemy of contacts) {
+      if (
+        this.flow.state !== GAME_FLOW_STATE.PLAYING ||
+        !enemy.isAlive() ||
+        !this.playerDamage.isAlive() ||
+        this.isPlayerGuardedAgainst(enemy, nowMs)
+      ) {
+        continue;
+      }
+
+      this.damageSystem.applyDamage(
+        enemy.createContactDamageRequest(this.playerDamage, nowMs),
+      );
+    }
   }
 
   private tryChaseAttack(enemy: ChaseEnemy, nowMs: number): void {
     if (!enemy.isAlive() || !this.playerDamage.isAlive()) return;
+    if (this.isPlayerGuardedAgainst(enemy, nowMs)) return;
 
     const playerBounds = new Phaser.Geom.Rectangle(
       this.player.x - PLAYER_VISUAL.widthPx / 2,
@@ -363,23 +385,36 @@ export class GameScene extends Phaser.Scene {
     if (request) this.damageSystem.applyDamage(request);
   }
 
-  private updateAttackFlash(attack: AttackPresentation | null): void {
-    if (!attack) {
-      this.attackFlash.setVisible(false);
-      return;
-    }
+  private updateAttackEffects(attack: AttackPresentation | null): void {
+    if (!attack) return;
 
     if (attack.attackId !== this.lastShockwaveAttackId) {
       this.lastShockwaveAttackId = attack.attackId;
       this.createAttackShockwave(attack);
     }
+  }
 
-    this.attackFlash
-      .setPosition(attack.flash.bounds.center.x, attack.flash.bounds.center.y)
-      .setSize(attack.flash.bounds.widthPx, attack.flash.bounds.heightPx)
-      .setDisplaySize(attack.flash.bounds.widthPx, attack.flash.bounds.heightPx)
-      .setAlpha(attack.flash.alpha)
-      .setVisible(true);
+  private isPlayerGuardedAgainst(
+    enemy: PatrolEnemy | ChaseEnemy,
+    nowMs: number,
+  ): boolean {
+    if (this.contactGuard.protectsAgainst(enemy.id, nowMs)) return true;
+
+    const attack = this.playerCombat.getPresentation(nowMs);
+    if (
+      attack === null ||
+      !attack.active ||
+      !AttackHitbox.overlaps(attack.hitbox, this.getDamageableBounds(enemy))
+    ) {
+      return false;
+    }
+
+    this.contactGuard.grant(
+      enemy.id,
+      nowMs,
+      this.gameConfig.combat.playerMelee.contactGuardMs,
+    );
+    return true;
   }
 
   private createAttackShockwave(attack: AttackPresentation): void {
@@ -419,13 +454,45 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private createEnemyHitSpark(position: Vec2, facing: "left" | "right"): void {
+    const direction = facing === "right" ? 1 : -1;
+    const duration = this.gameConfig.combat.playerMelee.hitSparkDurationMs;
+    const impactX = position.x - direction * 8;
+    const star = this.add
+      .star(impactX, position.y, 6, 3, 13, 0xfef3c7, 0.95)
+      .setDepth(8)
+      .setRotation(direction * 0.2);
+    const ring = this.add
+      .circle(impactX, position.y, 9, 0xffffff, 0)
+      .setStrokeStyle(3, 0x67e8f9, 0.95)
+      .setDepth(7);
+
+    this.tweens.add({
+      targets: star,
+      x: impactX + direction * 12,
+      scale: 1.8,
+      angle: direction * 55,
+      alpha: 0,
+      duration,
+      ease: "Cubic.Out",
+      onComplete: () => star.destroy(),
+    });
+    this.tweens.add({
+      targets: ring,
+      scale: 2.2,
+      alpha: 0,
+      duration: duration + 45,
+      ease: "Quad.Out",
+      onComplete: () => ring.destroy(),
+    });
+  }
+
   private completeLevel(): void {
     if (this.flow.state !== GAME_FLOW_STATE.PLAYING) return;
 
     this.flow.transition(GAME_FLOW_STATE.COMPLETED);
     this.player.setActive(false);
     this.physics.world.pause();
-    this.attackFlash.setVisible(false);
     this.eventBus.emit(GAME_EVENT.LEVEL_COMPLETED, {
       levelId: LEVEL_01.id,
       playerId: this.playerDamage.id,
@@ -489,6 +556,8 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.off("keydown-ESC", this.togglePause, this);
       this.input.keyboard?.off("keydown-R", this.requestRestart, this);
       this.playerCombat.dispose();
+      this.contactGuard.clear();
+      this.pendingEnemyContacts.clear();
       this.damageSystem.clear();
       for (const unsubscribe of this.unsubscribe.splice(0)) unsubscribe();
     });
@@ -508,7 +577,6 @@ export class GameScene extends Phaser.Scene {
 
     this.flow.transition(GAME_FLOW_STATE.FAILED);
     this.physics.world.pause();
-    this.attackFlash.setVisible(false);
   }
 
   private readonly requestRestart = (): void => {
@@ -530,7 +598,6 @@ export class GameScene extends Phaser.Scene {
       this.flow.transition(GAME_FLOW_STATE.PAUSED);
       this.physics.world.pause();
       this.anims.pauseAll();
-      this.attackFlash.setVisible(false);
       this.eventBus.emit(GAME_EVENT.PAUSE_CHANGED, {
         paused: true,
         reason: "keyboard",

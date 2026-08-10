@@ -30,8 +30,9 @@ export class PatrolEnemy extends BaseEnemy {
     this.stateMachine.transition(ENEMY_STATE.PATROL);
   }
 
-  update(): void {
+  update(nowMs = Number.POSITIVE_INFINITY): void {
     if (!this.isAlive()) return;
+    if (this.isHurtStunned(nowMs)) return;
     this.recoverFromHurt(ENEMY_STATE.PATROL);
 
     const body = this.arcadeBody;

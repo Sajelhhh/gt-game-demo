@@ -53,9 +53,10 @@ export class PlayerDamageAdapter implements Damageable {
     return this.health.commitDamage(amount);
   }
 
-  grantInvulnerability(untilMs: number): void {
+  grantInvulnerability(untilMs: number, startedAtMs?: number): void {
     this.invulnerableUntilMs = Math.max(this.invulnerableUntilMs, untilMs);
-    const damageStartedAtMs = untilMs - this.config.invulnerabilityMs;
+    const damageStartedAtMs =
+      startedAtMs ?? untilMs - this.config.invulnerabilityMs;
     this.controlLockedUntilMs = Math.max(
       this.controlLockedUntilMs,
       damageStartedAtMs + this.config.hurtControlLockMs,

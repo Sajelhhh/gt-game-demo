@@ -23,8 +23,6 @@ export type AttackPresentation = Readonly<{
   attackId: string;
   active: boolean;
   hitbox: HitBounds;
-  /** A renderer may draw this translucent box for an asset-free slash flash. */
-  flash: Readonly<{ bounds: HitBounds; alpha: number }>;
 }>;
 
 export type PlayerHitAttempt =
@@ -67,12 +65,18 @@ export class PlayerCombat {
     }
   }
 
-  update(nowMs: number, source: PlayerAttackSource): AttackPresentation | null {
+  update(
+    nowMs: number,
+    source: PlayerAttackSource,
+    canStartAttack = true,
+  ): AttackPresentation | null {
     this.validateNow(nowMs);
     this.finishExpiredAttack(nowMs);
+    const attackPressed = this.input.readAttackPressed();
 
     if (
-      this.input.readAttackPressed() &&
+      canStartAttack &&
+      attackPressed &&
       this.activeAttack === null &&
       nowMs - this.lastAttackStartedAtMs >= this.config.cooldownMs
     ) {
@@ -92,7 +96,6 @@ export class PlayerCombat {
       attackId: attack.id,
       active,
       hitbox: attack.hitbox,
-      flash: { bounds: attack.hitbox, alpha: active ? 0.75 : 0.3 },
     };
   }
 
@@ -128,6 +131,7 @@ export class PlayerCombat {
           y: -this.config.knockbackYPxPerSecond,
         },
         nowMs,
+        invulnerabilityMs: this.config.targetInvulnerabilityMs,
       }),
     };
   }

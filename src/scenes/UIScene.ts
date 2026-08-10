@@ -125,6 +125,12 @@ export class UIScene extends Phaser.Scene {
       this.eventBus.on(GAME_EVENT.ENTITY_DIED, ({ entityKind, diedAtMs }) => {
         if (entityKind !== "player") {
           this.defeatedEnemyCount += 1;
+          document
+            .querySelector("#game")
+            ?.setAttribute(
+              "data-defeated-enemies",
+              this.defeatedEnemyCount.toString(),
+            );
           return;
         }
 
@@ -192,6 +198,7 @@ export class UIScene extends Phaser.Scene {
     this.outcome = "playing";
     this.defeatedEnemyCount = 0;
     this.startedAtMs = this.time.now;
+    document.querySelector("#game")?.setAttribute("data-defeated-enemies", "0");
   }
 
   private readonly restart = (): void => {

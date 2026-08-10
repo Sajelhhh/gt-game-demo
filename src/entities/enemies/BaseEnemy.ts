@@ -53,6 +53,7 @@ export abstract class BaseEnemy
   private readonly visualOffsetYPx: number;
   private readonly health: Health;
   private invulnerableUntilMs = 0;
+  private hurtUntilMs = 0;
 
   protected constructor(
     scene: Phaser.Scene,
@@ -120,8 +121,14 @@ export abstract class BaseEnemy
     return this.health.commitDamage(amount);
   }
 
-  grantInvulnerability(untilMs: number): void {
+  grantInvulnerability(untilMs: number, startedAtMs?: number): void {
     this.invulnerableUntilMs = Math.max(this.invulnerableUntilMs, untilMs);
+    const damageStartedAtMs =
+      startedAtMs ?? untilMs - this.gameConfig.player.invulnerabilityMs;
+    this.hurtUntilMs = Math.max(
+      this.hurtUntilMs,
+      damageStartedAtMs + this.gameConfig.combat.playerMelee.enemyHitStunMs,
+    );
   }
 
   applyKnockback(velocity: Vec2): void {
@@ -181,6 +188,12 @@ export abstract class BaseEnemy
     if (this.stateMachine.state !== ENEMY_STATE.HURT) return false;
     this.stateMachine.transition(nextState);
     return true;
+  }
+
+  protected isHurtStunned(nowMs: number): boolean {
+    return (
+      this.stateMachine.state === ENEMY_STATE.HURT && nowMs < this.hurtUntilMs
+    );
   }
 
   protected get arcadeBody(): Phaser.Physics.Arcade.Body {

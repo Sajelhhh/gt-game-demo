@@ -40,6 +40,10 @@ export interface GameConfig {
       readonly shockwaveDurationMs: number;
       readonly shockwaveTravelPx: number;
       readonly shockwaveRadiusPx: number;
+      readonly hitSparkDurationMs: number;
+      readonly contactGuardMs: number;
+      readonly enemyHitStunMs: number;
+      readonly targetInvulnerabilityMs: number;
     };
     readonly contactKnockbackXPxPerSecond: number;
     readonly contactKnockbackYPxPerSecond: number;
@@ -130,6 +134,10 @@ const DEFAULTS = {
       shockwaveDurationMs: 220,
       shockwaveTravelPx: 58,
       shockwaveRadiusPx: 24,
+      hitSparkDurationMs: 170,
+      contactGuardMs: 260,
+      enemyHitStunMs: 180,
+      targetInvulnerabilityMs: 180,
     },
     contactKnockbackXPxPerSecond: 160,
     contactKnockbackYPxPerSecond: 120,

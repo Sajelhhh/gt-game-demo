@@ -261,6 +261,31 @@ describe("PatrolEnemy", () => {
     });
     expect(target.health).toBe(5);
   });
+
+  it("preserves knockback during hit stun before patrol AI resumes", () => {
+    const enemy = patrol("patrol-stun");
+    const damageSystem = new DamageSystem(new GameEventBus());
+
+    damageSystem.applyDamage({
+      target: enemy,
+      amount: 1,
+      cause: "player-attack",
+      sourceId: "player",
+      attackId: "player:attack:stun",
+      knockbackVelocity: { x: 150, y: -80 },
+      nowMs: 100,
+    });
+
+    enemy.update(279);
+    expect(enemy.enemyState).toBe(ENEMY_STATE.HURT);
+    expect(bodyOf(enemy).velocity).toEqual({ x: 150, y: -80 });
+
+    enemy.update(280);
+    expect(enemy.enemyState).toBe(ENEMY_STATE.PATROL);
+    expect(bodyOf(enemy).velocity.x).toBe(
+      -DEFAULT_GAME_CONFIG.enemies.patrol.moveSpeedPxPerSecond,
+    );
+  });
 });
 
 describe("ChaseEnemy", () => {
@@ -295,18 +320,22 @@ describe("ChaseEnemy", () => {
 
     enemy.update(target, 100);
     expect(enemy.enemyState).toBe(ENEMY_STATE.ATTACK);
-    expect(enemy.takeAttackDamageRequest(target, 100)).toMatchObject({
+    expect(enemy.takeAttackDamageRequest(target, 100)).toBeNull();
+    enemy.update(target, 134);
+    expect(enemy.takeAttackDamageRequest(target, 134)).toMatchObject({
       amount: DEFAULT_GAME_CONFIG.enemies.chase.attackDamage,
       cause: "enemy-attack",
       attackId: "chase-1:melee:1",
     });
-    expect(enemy.takeAttackDamageRequest(target, 101)).toBeNull();
+    expect(enemy.takeAttackDamageRequest(target, 135)).toBeNull();
 
     enemy.update(target, 999);
     expect(enemy.enemyState).toBe(ENEMY_STATE.CHASE);
     expect(enemy.takeAttackDamageRequest(target, 999)).toBeNull();
     enemy.update(target, 1000);
-    expect(enemy.takeAttackDamageRequest(target, 1000)).toMatchObject({
+    expect(enemy.takeAttackDamageRequest(target, 1000)).toBeNull();
+    enemy.update(target, 1034);
+    expect(enemy.takeAttackDamageRequest(target, 1034)).toMatchObject({
       attackId: "chase-1:melee:2",
     });
   });

@@ -23,6 +23,11 @@ describe("DEFAULT_GAME_CONFIG", () => {
     expect(DEFAULT_GAME_CONFIG.combat.playerMelee.shockwaveDurationMs).toBe(
       220,
     );
+    expect(DEFAULT_GAME_CONFIG.combat.playerMelee.contactGuardMs).toBe(260);
+    expect(DEFAULT_GAME_CONFIG.combat.playerMelee.enemyHitStunMs).toBe(180);
+    expect(DEFAULT_GAME_CONFIG.combat.playerMelee.targetInvulnerabilityMs).toBe(
+      180,
+    );
     expect(DEFAULT_GAME_CONFIG.level.id).toBe("level-01");
     expect(validateGameConfig(DEFAULT_GAME_CONFIG)).toEqual([]);
     expect(Object.isFrozen(DEFAULT_GAME_CONFIG)).toBe(true);
